@@ -243,7 +243,7 @@ class MCSTmodel(object):
         print('ave loss', total_loss / num)
 
         #return 1.0 * total_loss / num_loss, step
-        return ave_loss, step
+        return ave_loss, ave_acc, step
 
     def train(self, data, epochs, batch_size, save_dir, save_prefix,
               dropout_keep_prob=1.0, evaluate=True):
@@ -263,7 +263,7 @@ class MCSTmodel(object):
         # print pad_id
         max_bleu_4 = 0
         train_step = 0
-        test_step = 0
+        dev_step = 0
         #pmct = PSCHTree(self.args, self.vocab)
         start_all_time = time.time()
 
@@ -275,9 +275,11 @@ class MCSTmodel(object):
             # mctree.search()
 
             #result = self._train_epoch_new(pmct, train_batches, batch_size, dropout_keep_prob)
-            result, train_step = self._train_epoch(train_step, train_batches, dropout_keep_prob)
+            train_ave_loss, train_ave_acc, train_step = self._train_epoch(train_step, train_batches, dropout_keep_prob)
+            self.tfg.draw_train(train_ave_loss, train_ave_acc, train_step)
             epoch_end_time = time.time()
-            self.logger.info('Average train loss for epoch {} is {}'.format(epoch, result))
+            self.logger.info('Average train loss for epoch {} is {}'.format(epoch, train_ave_loss))
+            self.logger.info('Average train acc for epoch {} is {}'.format(epoch, train_ave_acc))
             #self.save(save_dir, save_prefix + '_' + str(epoch))
             self.logger.info(
                 'Train time for epoch {} is {} min'.format(epoch, str((epoch_end_time - epoch_start_time) / 60)))
@@ -286,7 +288,10 @@ class MCSTmodel(object):
                 if data.dev_set is not None:
                     eval_loss, total_loss, num_loss = 0, 0, 0
                     eval_batches = data.gen_batches('dev', batch_size, pad_id, shuffle=False)
-                    ave_loss, acc = self.evaluate(test_step, eval_batches,dropout_keep_prob)
+                    dev_ave_loss, dev_ave_acc, dev_step= self.evaluate(dev_step, eval_batches,dropout_keep_prob)
+                    self.tfg.draw_test(dev_ave_loss, dev_ave_acc, dev_step)
+                    self.logger.info('Average dev loss for epoch {} is {}'.format(epoch, dev_ave_loss))
+                    self.logger.info('Average dev acc for epoch {} is {}'.format(epoch, dev_ave_acc))
             #
             #         if bleu_rouge['Bleu-4'] > max_bleu_4:
             #             pmct.save(save_dir, save_prefix)
@@ -361,14 +366,16 @@ class MCSTmodel(object):
 
             # for every data in batch do training process
             for idx, batch_tree in enumerate(batch_tree_set, 1):
-                loss, acc = batch_tree.train_encode_and_select_passage(step)
+                loss, acc = batch_tree.dev_encode_and_select_passage(step)
                 total_loss += loss
                 total_acc += acc
                 num += 1
         print('ave acc', total_acc / num)
         print('ave loss', total_loss / num)
+        ave_acc = total_acc / num
+        ave_loss = total_loss / num
 
         # return 1.0 * total_loss / num_loss, step
-        return 0, step
+        return ave_loss, ave_acc, step
 
 

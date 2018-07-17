@@ -257,7 +257,7 @@ class SearchTree(object):
                                     'answers': self.data['ref_answers']})
         listSelectedSet = []
         all_set = []
-        if step%2000 == 0:
+        if step%20 == 0:
             print '+++++++++++++++++++++++++++++++++++++++++++'
             print ('question_id', self.data['question_id'])
         # print 'question'
@@ -265,6 +265,15 @@ class SearchTree(object):
 
         p_result_list = []
         y_list = []
+
+        input_q = []
+        input_q_length = []
+        input_p = []
+        input_p_length = []
+        input_t = []
+        input_t_length = []
+        input_selected = []
+
         for p_idx, if_selected in enumerate(self.data['passage_is_selected_list'],0):
             #print "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
             all_set += self.data['passage_token_ids_list'][p_idx]
@@ -301,6 +310,7 @@ class SearchTree(object):
             # print ('passage_title_length_list', np.shape([self.data['passage_title_length_list'][p_idx]]))
             # print ('[is_selected]', np.shape([is_selected]))
             # print '-------------------------------------'
+
             self.tfg.set_feed_dict_train([self.data['passage_token_ids_list'][p_idx]],
                                    [self.data['question_token_ids']],
                                    [self.data['passage_title_token_ids_list'][p_idx]],
@@ -328,7 +338,7 @@ class SearchTree(object):
 
 
             total_loss += loss
-            if step % 2000 == 0:
+            if step % 20 == 0:
                 print ('p', p_l[0][0])
                 print ('loss', loss)
         #print '+++++++++++++++++++++++++++++++++++++++++++'
@@ -338,14 +348,16 @@ class SearchTree(object):
             if pl == y_list[i]:
                 acc_num += 1
             all_num += 1
-        if step % 2000 == 0:
+        if step % 20 == 0:
             print ('p_result_list', p_result_list)
             print ('y_list', y_list)
         # print ('acc_num', acc_num)
         acc = 1.0 * acc_num/all_num
 
         ave_loss = total_loss / all_num
-        return  ave_loss, acc
+
+
+        return ave_loss, acc
 
     def dev_encode_and_select_passage(self, step):
 
@@ -358,7 +370,7 @@ class SearchTree(object):
                             'answers': self.data['ref_answers']})
         listSelectedSet = []
         all_set = []
-        if step % 2000 == 0:
+        if step % 20 == 0:
             print '+++++++++++++++++++++++++++++++++++++++++++'
             print ('question_id', self.data['question_id'])
         # print 'question'
@@ -414,7 +426,7 @@ class SearchTree(object):
             else:
                 p_result_list.append(0)
 
-            loss = self.tfg.test_loss()
+            loss = self.tfg.test_loss()[0][0]
             total_loss += loss
             #print ('loss', loss)
         #print '+++++++++++++++++++++++++++++++++++++++++++'
@@ -439,3 +451,24 @@ class SearchTree(object):
             else:
                 new_token_ids.append(id)
         return new_token_ids, length
+
+    def _dynamic_padding(self, batch_data, pad_id = 0 ):
+        """
+        Dynamically pads the batch_data with pad_id
+        """
+        #print 'dynamic _padding...'
+        #print 'pad_id' + str(pad_id)
+        max_p_len = 1000
+        max_q_len =1000
+        pad_p_len = min(max_p_len, max(batch_data['passage_length']))+1
+        #print 'pad_p_len' + str(pad_p_len)
+        pad_q_len = min(max_q_len, max(batch_data['question_length']))
+        #print 'pad_q_len' + str(pad_q_len)
+        #for ids in batch_data['passage_token_ids'] :
+            #print 'padding: '
+            #print (ids + [pad_id] * (pad_p_len - len(ids)))[: pad_p_len]
+        batch_data['passage_token_ids'] = [(ids + [pad_id] * (pad_p_len - len(ids)))[: pad_p_len]
+                                           for ids in batch_data['passage_token_ids']]
+        batch_data['question_token_ids'] = [(ids + [pad_id] * (pad_q_len - len(ids)))[: pad_q_len]
+                                            for ids in batch_data['question_token_ids']]
+        return batch_data, pad_p_len, pad_q_len

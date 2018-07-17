@@ -54,6 +54,7 @@ class TFGraph(object):
         self._fuse()
         self._action()
         self._create_train_op()
+        self._draw_rfboard()
         # param_num = sum([np.prod(self.sess.run(tf.shape(v))) for v in self.all_params])
         # self.logger.info('There are {} parameters in the model'.format(param_num))
         self.saver = tf.train.Saver()
@@ -71,6 +72,8 @@ class TFGraph(object):
         self.t_length = tf.placeholder(tf.int32, [None])
         self.q_length = tf.placeholder(tf.int32, [None])
         self.is_selected = tf.placeholder(tf.float32, [None, None])
+        self.result = tf.placeholder(tf.float32, None)
+        self.acc = tf.placeholder(tf.float32, None)
         self.dropout_keep_prob = tf.placeholder(tf.float32)
 
 
@@ -143,7 +146,7 @@ class TFGraph(object):
 
 
 
-        self.W_l = tf.Variable(tf.random_uniform([self.hidden_size * 2, self.hidden_size * 2], -1. / self.hidden_size,
+        self.W_l = tf.Variable(tf.random_uniform([self.hidden_size * 2, self.hidden_size * 4], -1. / self.hidden_size,
                                                1. / self.hidden_size))
         self.b_l = tf.Variable(tf.random_uniform([1], minval=0.0, maxval=1.0, dtype=tf.float32, seed=None, name=None))
 
@@ -155,8 +158,8 @@ class TFGraph(object):
 
     def _action(self):
 
-        #self.P_T = tf.concat([self.fuse_T, self.sep_Q], 1)
-        self.P_T = self.fuse_T
+        self.P_T = tf.concat([self.fuse_T, self.fuse_P], 1)
+        #self.P_T = self.fuse_T
         self.p_l = tf.sigmoid(tf.add(tf.matmul(tf.matmul(self.sep_Q, self.W_l), tf.transpose(self.P_T)), self.b_l))
         self.p_loss = tf.add(tf.matmul(tf.matmul(self.sep_Q, self.W_l), tf.transpose(self.P_T)), self.b_l)
 
@@ -174,6 +177,14 @@ class TFGraph(object):
         self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)
 
         self.train_op = self.optimizer.minimize(self.loss)
+
+    def _draw_rfboard(self):
+        self.loss_summary = tf.summary.scalar('loss', tf.reduce_mean(self.result))
+        self.acc_summary = tf.summary.scalar('rb', tf.reduce_mean(self.acc))
+        with tf.name_scope('summary'):
+            self.merged = tf.summary.merge_all()
+            self.train_writer = tf.summary.FileWriter(self.draw_path+'/train')
+            self.test_writer = tf.summary.FileWriter(self.draw_path+'/test')
 
     def set_feed_dict_train(self,p,q,t,p_length, q_length, t_length,is_selected, dropout_keep_prob):
         self.feed_dict = {
@@ -206,6 +217,16 @@ class TFGraph(object):
         # return a, b, c, d, e
         loss = self.sess.run([self.loss], feed_dict=self.feed_dict)
         return loss
+
+    def draw_train(self, result, acc, step):
+        feed_dict = dict({self.result: result, self.acc: acc})
+        summary = self.sess.run(self.merged, feed_dict = feed_dict)
+        self.train_writer.add_summary(summary, step)
+
+    def draw_test(self, result, acc, step):
+        feed_dict = dict({self.result: result, self.acc: acc})
+        summary = self.sess.run(self.merged, feed_dict = feed_dict)
+        self.test_writer.add_summary(summary, step)
 
     def get_p_l(self):
         # a, b, c, d, e = self.sess.run([self.sep_Q, self.fuse_p_encodes, self.fuse_P, self.fuse_t_encodes, self.fuse_T], feed_dict=self.feed_dict)
